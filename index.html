@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>深色極簡計分板系統</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <style>
+        /* ========== 深色模式變數 ========== */
+        :root {
+            --bg-body: #09090B;       /* 深邃黑背景 */
+            --bg-surface: #18181B;    /* 深灰卡片 */
+            --text-main: #FAFAFA;     /* 亮白文字 */
+            --text-muted: #A1A1AA;    /* 次要文字 (灰) */
+            --accent-blue: #3B82F6;   /* 預設主色藍 */
+            --accent-red: #EF4444;    /* 停止/警告紅 */
+            --border-color: #27272A;  /* 邊框深灰 */
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+            --transition: all 0.2s ease-in-out;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', "Segoe UI", sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        button { font-family: inherit; }
+
+        /* ========== 設定頁面 ========== */
+        #setup-screen {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+        
+        .setup-card {
+            background: var(--bg-surface);
+            padding: 40px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-md);
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .setup-card h1 {
+            text-align: center;
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 30px;
+            color: var(--text-main);
+        }
+
+        .input-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .input-group label {
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .input-group input[type="number"] {
+            width: 70px;
+            padding: 8px;
+            background: #27272A;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            text-align: center;
+            font-size: 16px;
+            font-weight: 600;
+            outline: none;
+            transition: var(--transition);
+        }
+        .input-group input[type="number"]:focus { border-color: var(--accent-blue); }
+
+        .team-names-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 30px;
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .team-names-grid input {
+            width: 100%;
+            padding: 10px;
+            background: #27272A;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+        }
+        .team-names-grid input:focus { border-color: var(--accent-blue); }
+
+        .btn-start {
+            width: 100%;
+            padding: 16px;
+            background-color: var(--text-main);
+            color: var(--bg-body);
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .btn-start:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(255,255,255,0.2); }
+
+        /* ========== 遊戲頁面 ========== */
+        #game-screen { display: none; flex-direction: column; min-height: 100vh; }
+
+        /* 頂部控制列 */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .round-controller { display: flex; align-items: center; gap: 15px; }
+        .round-label { font-size: 20px; font-weight: 700; color: var(--text-muted); }
+        .round-number { font-size: 24px; font-weight: 800; color: var(--text-main); min-width: 30px; text-align: center; }
+        .round-btn {
+            width: 36px; height: 36px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-body);
+            border-radius: 8px;
+            font-size: 18px; font-weight: 600;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: var(--transition);
+        }
+        .round-btn:hover { background: #27272A; color: var(--text-main); border-color: #3F3F46; }
+        .round-reset { width: auto; padding: 0 12px; font-size: 13px; }
+
+        /* GO! / STOP 按鈕 */
+        #btn-go {
+            padding: 12px 60px;
+            font-size: 28px; font-weight: 800;
+            border-radius: 99px; border: none;
+            cursor: pointer;
+            background: var(--text-main);
+            color: var(--bg-body);
+            box-shadow: 0 0 20px rgba(255,255,255,0.2);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            letter-spacing: 1px;
+        }
+        #btn-go:hover { transform: scale(1.05); }
+        #btn-go.scoring {
+            background: var(--accent-red);
+            color: white;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+            animation: breathe 1.5s infinite alternate;
+        }
+        @keyframes breathe {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.02); box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); }
+        }
+
+        .btn-settings {
+            background: none; border: none;
+            color: var(--text-muted);
+            font-size: 16px; font-weight: 600;
+            cursor: pointer; display: flex; align-items: center; gap: 8px;
+            transition: var(--transition);
+        }
+        .btn-settings:hover { color: var(--text-main); }
+
+        /* ========== 隊伍網格與卡片 ========== */
+        .teams-grid {
+            flex-grow: 1; padding: 40px;
+            display: grid; gap: 24px; align-content: start;
+        }
+
+        .team-card {
+            background: var(--bg-surface);
+            border-radius: 16px;
+            padding: 32px 20px;
+            border: 2px solid var(--border-color);
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex; flex-direction: column; justify-content: center;
+            position: relative;
+            /* 預設隊伍變數，會在 JS 中動態更新 */
+            --team-color: #3B82F6; 
+        }
+        
+        .team-card:hover:not(.disabled):not(.selected) {
+            border-color: #3F3F46;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.6);
+        }
+        
+        /* 選取狀態：邊框與發光變成該隊伍的專屬顏色 */
+        .team-card.selected {
+            border-color: var(--team-color);
+            box-shadow: 0 0 15px var(--team-color), 0 0 0 1px var(--team-color) inset;
+            transform: translateY(-4px);
+        }
+        
+        /* 防呆：計分中禁止切換其他隊伍 */
+        .team-card.disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            pointer-events: none;
+            filter: grayscale(80%);
+        }
+
+        /* 直接在遊戲畫面選色的 input */
+        .color-picker {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            background: transparent;
+            padding: 0;
+        }
+        /* 隱藏預設樣式讓色塊變圓形 */
+        .color-picker::-webkit-color-swatch-wrapper { padding: 0; }
+        .color-picker::-webkit-color-swatch {
+            border: 2px solid var(--bg-surface);
+            border-radius: 50%;
+            box-shadow: 0 0 0 1px var(--border-color);
+        }
+
+        .team-name {
+            font-size: 18px; font-weight: 700;
+            color: var(--text-muted);
+            margin-bottom: 10px; word-break: break-word;
+            padding-right: 20px; /* 避免擋到調色盤 */
+        }
+
+        .team-score {
+            font-size: 80px; font-weight: 800;
+            color: var(--text-main);
+            line-height: 1; margin-bottom: 20px;
+            font-variant-numeric: tabular-nums;
+            text-shadow: 0 0 20px rgba(255,255,255,0.1);
+        }
+
+        .manual-controls { display: flex; justify-content: center; gap: 12px; }
+        .manual-controls button {
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            border: 1px solid var(--border-color);
+            background: var(--bg-body);
+            font-size: 20px; font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer; transition: var(--transition);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .manual-controls button:hover { background: #27272A; color: var(--text-main); }
+
+        /* ========== 2秒全螢幕動畫 ========== */
+        #flash-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            /* 放射狀漸層，從中心發散的指定顏色 */
+            background: radial-gradient(circle, var(--flash-color, rgba(255,255,255,0.8)) 0%, transparent 80%);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 9999;
+            mix-blend-mode: screen; /* 讓光暈在深色背景上更融合 */
+        }
+        /* 動畫時間改為 2 秒 */
+        #flash-overlay.active {
+            animation: flashAnim 2s ease-out forwards;
+        }
+        @keyframes flashAnim {
+            0% { opacity: 0.6; }
+            10% { opacity: 0.8; transform: scale(1.05); }
+            100% { opacity: 0; transform: scale(1); }
+        }
+
+        @media (max-width: 768px) {
+            .top-bar { flex-direction: column; gap: 20px; padding: 20px; }
+            #btn-go { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <audio id="score-sound" src="https://www.myinstants.com/media/sounds/mario-1-up.mp3" preload="auto"></audio>
+    <div id="flash-overlay"></div>
+
+    <div id="setup-screen">
+        <div class="setup-card">
+            <h1>Scoreboard Setup</h1>
+            
+            <div class="input-group">
+                <label>隊伍總數</label>
+                <input type="number" id="cfg-team-count" value="4" min="1" max="20" oninput="generateTeamInputs()">
+            </div>
+            
+            <div class="input-group">
+                <label>每行顯示幾隊</label>
+                <input type="number" id="cfg-teams-per-row" value="4" min="1" max="10">
+            </div>
+            
+            <div class="input-group">
+                <label>自動計分規則</label>
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--text-muted);">
+                    每 <input type="number" id="cfg-sec" value="5" min="1"> 秒
+                    加 <input type="number" id="cfg-pts" value="1"> 分
+                </div>
+            </div>
+
+            <label style="display: block; font-weight: 600; color: var(--text-muted); margin-bottom: 10px; font-size: 14px;">自訂隊伍名稱</label>
+            <div id="team-names-inputs" class="team-names-grid">
+                </div>
+
+            <button class="btn-start" onclick="startGame()">進入系統</button>
+        </div>
+    </div>
+
+    <div id="game-screen">
+        <div class="top-bar">
+            <div class="round-controller">
+                <span class="round-label">ROUND</span>
+                <span class="round-number" id="disp-round">0</span>
+                <button class="round-btn" onclick="adjustRound(-1)"><i class="fa-solid fa-minus"></i></button>
+                <button class="round-btn" onclick="adjustRound(1)"><i class="fa-solid fa-plus"></i></button>
+                <button class="round-btn round-reset" onclick="adjustRound(0)">RESET</button>
+            </div>
+            
+            <button id="btn-go" onclick="toggleTimer()">GO!</button>
+            
+            <button class="btn-settings" onclick="backToSettings()">
+                <i class="fa-solid fa-gear"></i> 返回設定
+            </button>
+        </div>
+
+        <div id="game-grid" class="teams-grid">
+            </div>
+    </div>
+
+    <script>
+        // 預設顏色陣列供初始使用
+        const defaultColors = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#F97316'];
+        
+        let teams = [];
+        let ruleSec = 5;
+        let rulePoints = 1;
+        let currentRound = 0;
+        let selectedTeamId = null;
+        let isScoring = false;
+        let timerInterval = null;
+
+        function generateTeamInputs() {
+            const count = document.getElementById('cfg-team-count').value;
+            const container = document.getElementById('team-names-inputs');
+            container.innerHTML = '';
+            for (let i = 1; i <= count; i++) {
+                container.innerHTML += `<input type="text" id="name-in-${i}" placeholder="隊伍 ${i}" value="${i}">`;
+            }
+        }
+        generateTeamInputs();
+
+        function startGame() {
+            const count = document.getElementById('cfg-team-count').value;
+            const perRow = document.getElementById('cfg-teams-per-row').value;
+            ruleSec = parseInt(document.getElementById('cfg-sec').value);
+            rulePoints = parseInt(document.getElementById('cfg-pts').value);
+            
+            teams = [];
+            for (let i = 1; i <= count; i++) {
+                teams.push({
+                    id: i,
+                    name: document.getElementById(`name-in-${i}`).value || i.toString(),
+                    score: 0,
+                    color: defaultColors[(i-1) % defaultColors.length] // 分配預設顏色
+                });
+            }
+
+            document.getElementById('game-grid').style.gridTemplateColumns = `repeat(${perRow}, 1fr)`;
+
+            document.getElementById('score-sound').play().then(() => {
+                document.getElementById('score-sound').pause();
+                document.getElementById('score-sound').currentTime = 0;
+            }).catch(e => console.log("等待互動解鎖音效"));
+
+            document.getElementById('setup-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'flex';
+            
+            renderTeams();
+        }
+
+        function backToSettings() {
+            if (isScoring) toggleTimer(); 
+            selectedTeamId = null;
+            document.getElementById('setup-screen').style.display = 'flex';
+            document.getElementById('game-screen').style.display = 'none';
+        }
+
+        function renderTeams() {
+            const container = document.getElementById('game-grid');
+            container.innerHTML = '';
+            
+            teams.forEach(team => {
+                let classes = 'team-card';
+                if (selectedTeamId === team.id) classes += ' selected';
+                if (isScoring && selectedTeamId !== team.id) classes += ' disabled';
+
+                container.innerHTML += `
+                    <div class="${classes}" style="--team-color: ${team.color}" onclick="selectTeam(${team.id})">
+                        
+                        <input type="color" class="color-picker" value="${team.color}" 
+                            onclick="event.stopPropagation();" 
+                            onchange="updateTeamColor(event, ${team.id}, this.value)"
+                            title="變更隊伍顏色">
+                        
+                        <div class="team-name">${team.name}</div>
+                        <div class="team-score" id="score-${team.id}">${team.score}</div>
+                        
+                        <div class="manual-controls">
+                            <button onclick="manualScore(event, ${team.id}, -1)"><i class="fa-solid fa-minus"></i></button>
+                            <button onclick="manualScore(event, ${team.id}, 1)"><i class="fa-solid fa-plus"></i></button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // 更新隊伍顏色並即時渲染
+        function updateTeamColor(event, id, newColor) {
+            const team = teams.find(t => t.id === id);
+            if (team) {
+                team.color = newColor;
+                renderTeams(); // 重新渲染卡片以套用新顏色
+            }
+        }
+
+        function selectTeam(id) {
+            if (isScoring) return; // 防呆
+            selectedTeamId = (selectedTeamId === id) ? null : id;
+            renderTeams();
+        }
+
+        function toggleTimer() {
+            const btn = document.getElementById('btn-go');
+
+            if (!isScoring) {
+                if (selectedTeamId === null) return alert("請先點選一支隊伍！");
+                
+                adjustRound(1);
+                isScoring = true;
+                btn.textContent = "STOP";
+                btn.classList.add('scoring');
+                renderTeams();
+
+                timerInterval = setInterval(() => {
+                    addScore(selectedTeamId, rulePoints);
+                    triggerEffect(selectedTeamId);
+                }, ruleSec * 1000);
+
+            } else {
+                isScoring = false;
+                btn.textContent = "GO!";
+                btn.classList.remove('scoring');
+                clearInterval(timerInterval);
+                renderTeams();
+            }
+        }
+
+        function addScore(id, points) {
+            const team = teams.find(t => t.id === id);
+            if (team) {
+                team.score += points;
+                document.getElementById(`score-${id}`).textContent = team.score;
+            }
+        }
+
+        function manualScore(event, id, points) {
+            event.stopPropagation();
+            addScore(id, points);
+            if (points > 0) triggerEffect(id);
+        }
+
+        // 觸發 2 秒鐘的專屬顏色特效與音效
+        function triggerEffect(teamId) {
+            const team = teams.find(t => t.id === teamId);
+            const teamColor = team ? team.color : '#ffffff';
+
+            const sound = document.getElementById('score-sound');
+            sound.currentTime = 0;
+            sound.play().catch(e => console.log("音效未解鎖"));
+
+            const flash = document.getElementById('flash-overlay');
+            // 將 CSS 變數設為該隊伍的顏色
+            flash.style.setProperty('--flash-color', teamColor);
+            
+            // 重新觸發 CSS Animation 的小技巧
+            flash.classList.remove('active');
+            void flash.offsetWidth; // 強制重繪
+            flash.classList.add('active');
+        }
+
+        function adjustRound(val) {
+            if (val === 0) currentRound = 0;
+            else currentRound += val;
+            if (currentRound < 0) currentRound = 0;
+            document.getElementById('disp-round').textContent = currentRound;
+        }
+    </script>
+</body>
+</html>
