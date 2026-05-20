@@ -307,6 +307,27 @@
             100% { opacity: 0; transform: scale(1); }
         }
 
+        /* ========== 自訂提示框 ========== */
+        #custom-alert {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--accent-red);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            z-index: 10000;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            animation: slideDown 0.3s ease-out;
+        }
+        @keyframes slideDown {
+            from { top: -20px; opacity: 0; }
+            to { top: 20px; opacity: 1; }
+        }
+
         @media (max-width: 768px) {
             .top-bar { flex-direction: column; gap: 20px; padding: 20px; }
             #btn-go { width: 100%; }
@@ -315,8 +336,11 @@
 </head>
 <body>
 
-    <audio id="score-sound" src="https://www.myinstants.com/media/sounds/mario-1-up.mp3" preload="auto"></audio>
+    <!-- 更改為 GitHub Raw 原始檔案網址 -->
+    <audio id="score-sound" src="https://raw.githubusercontent.com/tpectim/scoreboard/main/mario-1up.mp3" preload="auto"></audio>
+    <audio id="tick-sound" src="https://raw.githubusercontent.com/tpectim/scoreboard/main/pluck6.mp3" preload="auto"></audio>
     <div id="flash-overlay"></div>
+    <div id="custom-alert">請先點選一支隊伍！</div>
 
     <div id="setup-screen">
         <div class="setup-card">
@@ -380,6 +404,36 @@
         let selectedTeamId = null;
         let isScoring = false;
         let timerInterval = null;
+        let tickInterval = null; // 用來儲存 1 秒音效的計時器
+        
+        // 變數儲存音效網址
+        let cachedTickUrl = 'https://raw.githubusercontent.com/tpectim/scoreboard/main/pluck6.mp3';
+        let cachedScoreUrl = 'https://raw.githubusercontent.com/tpectim/scoreboard/main/mario-1up.mp3';
+
+        // 網頁載入時，立刻將音效下載為 Blob 暫存至瀏覽器記憶體中
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const [tickRes, scoreRes] = await Promise.all([
+                    fetch(cachedTickUrl),
+                    fetch(cachedScoreUrl)
+                ]);
+                
+                const tickBlob = await tickRes.blob();
+                const scoreBlob = await scoreRes.blob();
+                
+                // 產生專屬於這次瀏覽器工作階段的本地端虛擬網址 (暫存在記憶體)
+                cachedTickUrl = URL.createObjectURL(tickBlob);
+                cachedScoreUrl = URL.createObjectURL(scoreBlob);
+                
+                // 替換標籤上的 src，確保解鎖與單次播放都使用記憶體中的檔案
+                document.getElementById('tick-sound').src = cachedTickUrl;
+                document.getElementById('score-sound').src = cachedScoreUrl;
+                
+                console.log("音效已成功暫存於瀏覽器記憶體！");
+            } catch (err) {
+                console.error("音效暫存失敗，將退回使用原始網址", err);
+            }
+        });
 
         function generateTeamInputs() {
             const count = document.getElementById('cfg-team-count').value;
@@ -409,10 +463,17 @@
 
             document.getElementById('game-grid').style.gridTemplateColumns = `repeat(${perRow}, 1fr)`;
 
+            // 解鎖原始計分音效
             document.getElementById('score-sound').play().then(() => {
                 document.getElementById('score-sound').pause();
                 document.getElementById('score-sound').currentTime = 0;
             }).catch(e => console.log("等待互動解鎖音效"));
+
+            // 解鎖 1 秒循環音效
+            document.getElementById('tick-sound').play().then(() => {
+                document.getElementById('tick-sound').pause();
+                document.getElementById('tick-sound').currentTime = 0;
+            }).catch(e => console.log("等待互動解鎖 1 秒音效"));
 
             document.getElementById('setup-screen').style.display = 'none';
             document.getElementById('game-screen').style.display = 'flex';
@@ -471,11 +532,21 @@
             renderTeams();
         }
 
+        function showCustomAlert(msg) {
+            const alertBox = document.getElementById('custom-alert');
+            alertBox.textContent = msg;
+            alertBox.style.display = 'block';
+            setTimeout(() => alertBox.style.display = 'none', 3000);
+        }
+
         function toggleTimer() {
             const btn = document.getElementById('btn-go');
 
             if (!isScoring) {
-                if (selectedTeamId === null) return alert("請先點選一支隊伍！");
+                if (selectedTeamId === null) {
+                    showCustomAlert("請先點選一支隊伍！");
+                    return;
+                }
                 
                 adjustRound(1);
                 isScoring = true;
@@ -483,16 +554,29 @@
                 btn.classList.add('scoring');
                 renderTeams();
 
+                // 原始邏輯：依據設定秒數自動加分
                 timerInterval = setInterval(() => {
                     addScore(selectedTeamId, rulePoints);
                     triggerEffect(selectedTeamId);
                 }, ruleSec * 1000);
 
+                // 新增邏輯：每 1 秒 (1000毫秒) 播放一次音效
+                tickInterval = setInterval(() => {
+                    // 使用暫存在記憶體中的 Blob URL 播放，最穩定且無延遲
+                    const tick = new Audio(cachedTickUrl);
+                    tick.volume = 1;
+                    tick.play().catch(e => console.log("1秒音效播放失敗:", e));
+                }, 1000);
+
             } else {
                 isScoring = false;
                 btn.textContent = "GO!";
                 btn.classList.remove('scoring');
+                
+                // 停止時，同時清除兩個計時器
                 clearInterval(timerInterval);
+                clearInterval(tickInterval);
+                
                 renderTeams();
             }
         }
